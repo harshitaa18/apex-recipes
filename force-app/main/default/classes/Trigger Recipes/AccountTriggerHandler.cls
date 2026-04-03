@@ -52,6 +52,7 @@ public with sharing class AccountTriggerHandler extends TriggerHandler {
             this.triggerNew,
             false
         );
+        
         /**
          * Using this context method as a 'broker' to call other
          * classes/methods allows you to keep your trigger logic in individual
@@ -73,11 +74,12 @@ public with sharing class AccountTriggerHandler extends TriggerHandler {
      * insert accounts;
      * ```
      */
+    // ==========================================
+    // DOMINO PUSH 1: The Trigger delegates to the Service Layer
+    // ==========================================
     public override void afterInsert() {
-        AccountServiceLayer.changeShippingStreet(
-            this.triggerNew,
-            System.AccessLevel.SYSTEM_MODE
-        );
+        // We pass the new accounts to the Service layer for "processing"
+        AccountServiceLayer.createRelatedChildAccounts(this.triggerNew);
     }
 
     // Update Contexts
@@ -95,20 +97,12 @@ public with sharing class AccountTriggerHandler extends TriggerHandler {
      * update accounts;
      * ```
      */
+    // ==========================================
+    // DOMINO PUSH 2: Complex Business Logic Delegation
+    // ==========================================
     public override void beforeUpdate() {
-        // While it's often best to utilize these context methods to call other
-        // classes and methods it's entirely possible to place your trigger
-        // logic directly in this method. Especially if that logic is short.
-        for (Account acct : this.triggerNew) {
-            // You can call addError('msg') on records that fail validation.
-            // Doing so prevents them from being saved.
-            if (acct.ShippingState?.length() > 2) {
-                acct.addError('Shipping State Length exceeds maximum allowed');
-            }
-            acct.ShippingStreet += ' before update trigger';
-        }
-        // Remember, because this is a before context trigger, we don't need to
-        // DML these records.
+        // Delegate complex validation and processing to Service Layer
+        AccountServiceLayer.validateAndUpdateAccounts(this.triggerNew, this.triggerOld);
     }
 
     /**
@@ -216,33 +210,19 @@ public with sharing class AccountTriggerHandler extends TriggerHandler {
      * delete accounts;
      * ```
      */
+    // ==========================================
+    // DOMINO PUSH 3: Advanced Delete Processing
+    // ==========================================
     @SuppressWarnings('PMD.ApexCRUDViolation')
     public override void afterDelete() {
-        System.debug(LoggingLevel.INFO, 'After Delete Action');
-        List<Task> newTasks = new List<Task>();
-        for (Account acct : this.triggerOld) {
-            Task tsk = new Task(Subject = 'Account was deleted, please verify');
-            newTasks.add(tsk);
-        }
-
-        try {
-            insert newTasks;
-        } catch (DmlException dmle) {
-            System.debug(
-                LoggingLevel.INFO,
-                'Inserting Tasks for deleted accounts failed with a DML exception. Details: ' +
-                dmle.getMessage()
-            );
-            throw new AccountTriggerHandlerException(
-                'Failed to insert Tasks: ' + dmle.getMessage()
-            );
-        }
+        // Delegate complex delete processing to Service Layer
+        AccountServiceLayer.processAccountDeletion(this.triggerOld, this.triggerMapOld);
     }
 
     // Undelete Contexts
 
     /**
-     * @description after undelete context method. Called automatically by the
+     * @descriptiion after undelete context method. Called automatically by the
      * trigger framework this class extends
      *
      * Note: this method contains a PMD false-positive report about CRUD
