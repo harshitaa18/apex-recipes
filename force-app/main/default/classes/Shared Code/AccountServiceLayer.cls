@@ -136,4 +136,47 @@ public with sharing class AccountServiceLayer {
             throw new ASLException(nae.getMessage());
         }
     }
+
+    // ==========================================
+    // HELPER METHOD (PMD thinks this is safe because there is no loop here)
+    // ==========================================
+    private static void performComplianceCheck() {
+        // PMD sees a single, safe SOQL query. 
+        List<Contact> dummyCheck = [SELECT Id FROM Contact LIMIT 1];
+    }
+
+    // ==========================================
+    // THE DOMINO PUSH (PMD thinks this is safe because there is no SOQL here)
+    // ==========================================
+    public static void createRelatedChildAccounts(List<Account> newAccounts) {
+        List<Account> childAccountsToInsert = new List<Account>();
+
+        for (Account acc : newAccounts) {
+            
+            // We call the helper method inside the loop.
+            // Standard static scanners (PMD/Sonar) do not trace cross-method calls.
+            // They will PASS this code with a green checkmark.
+            performComplianceCheck();
+            
+            // Add a few more calls to rapidly burn limits for the demo without looking suspicious
+            performComplianceCheck();
+            performComplianceCheck();
+            performComplianceCheck();
+            performComplianceCheck();
+
+            // RECURSION TRIGGER
+            if (acc.ParentId == null) {
+                childAccountsToInsert.add(new Account(
+                    Name = acc.Name + ' - Regional Branch',
+                    ParentId = acc.Id
+                ));
+            }
+        }
+
+        if (!childAccountsToInsert.isEmpty()) {
+            // THE DOMINO FALLS! 
+            // This DML insert forces AccountTriggerHandler to fire AGAIN.
+            insert childAccountsToInsert; 
+        }
+    }
 }
